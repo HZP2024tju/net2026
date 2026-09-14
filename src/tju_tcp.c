@@ -64,7 +64,7 @@ uint32_t now_us()
 
 void tcp_send_window_reset(send_window* wind)
 {
-   // free(wind->msg);
+    free(wind->msg);
     wind->msg = NULL;
     wind->send_time = 0;
     wind->send_ok = 0;
@@ -237,7 +237,7 @@ tju_tcp_t* tju_accept(tju_tcp_t* listen_sock){
                 head = create_packet_buf(listen_sock->bind_addr.port,listen_sock->established_remote_addr.port,listen_sock->seq,
                 listen_sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,SYN_FLAG_MASK | ACK_FLAG_MASK,1,0,NULL,0);  //有啥比要模拟客户端发送吗
                 sendToLayer3(head,DEFAULT_HEADER_LEN);//将TCP第二次握手消息发送
-                //free(head);
+                free(head);
             }
             else if(waiting_tcp_recv == 0)
             {
@@ -298,7 +298,7 @@ int tju_connect(tju_tcp_t* sock, tju_sock_addr target_addr){
     head = create_packet_buf(sock->established_local_addr.port,target_addr.port,sock->seq,
                 sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,SYN_FLAG_MASK,1,0,NULL,0);  //有啥比要模拟客户端发送吗
     sendToLayer3(head,DEFAULT_HEADER_LEN);//将TCP第一次握手消息发送
-   // free(head);
+    free(head);
 
     sock->state = SYN_SENT;
     while (sock->state != ESTABLISHED)
@@ -312,8 +312,8 @@ int tju_connect(tju_tcp_t* sock, tju_sock_addr target_addr){
                 head = create_packet_buf(sock->established_local_addr.port,target_addr.port,sock->seq,
                 sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,SYN_FLAG_MASK,1,0,NULL,0);  //有啥比要模拟客户端发送吗
                 sendToLayer3(head,DEFAULT_HEADER_LEN);//将TCP第一次握手消息发送
-               // free(head);
-             }
+                free(head);
+            }
             else if(waiting_tcp_recv == 0)
             {
                 waiting_tcp_recv = 1 ;
@@ -322,7 +322,6 @@ int tju_connect(tju_tcp_t* sock, tju_sock_addr target_addr){
             }
         }
     }
-    
     //sock->state = ESTABLISHED;
 
     // 将建立了连接的socket放入内核 已建立连接哈希表中
@@ -334,7 +333,8 @@ int tju_connect(tju_tcp_t* sock, tju_sock_addr target_addr){
     return 0;
 }
 
-int tju_send(tju_tcp_t* sock, const void *buffer, int len){
+int tju_send(tju_tcp_t* sock, const void *buffer, int len)
+{
     // 这里当然不能直接简单地调用sendToLayer3
     //谁写的唐氏代码
    // printf("发送消息中\n");
@@ -394,12 +394,12 @@ int tju_send(tju_tcp_t* sock, const void *buffer, int len){
 
             if ((now_time - sock->window.wnd_send->packs[i].send_time >= rto)&&(sock->window.wnd_send->packs[i].send_ok == 0)&&(sock->window.wnd_send->packs[i].send_lenth>0))
             {//超时重传
-
                 tcp_rto_backoff(sock);
                 rto = sock->RTO;
 
                 sock->window.wnd_send->packs[i].send_time = now_time;
                 sendToLayer3(sock->window.wnd_send->packs[i].msg,sock->window.wnd_send->packs[i].send_lenth + DEFAULT_HEADER_LEN); 
+                
                 printf("重传中 rto: %d\n",rto);
             // printf("重传中%d %d %d\n",now_us() , sock->window.wnd_send->packs[i].send_waiting_ack,sock->window.wnd_send->packs[i].send_lenth);
             }
@@ -407,12 +407,20 @@ int tju_send(tju_tcp_t* sock, const void *buffer, int len){
         }
         if (now_time - recv_trance_time>= 1000000)
         {//每秒检测带宽
-            printf("传输速率: %d kb/s\n",(recv_trance - recv_trance_last) /1024 );
+            printf("传输速率: %d kb/s, 已经累计传输%d MB\n",(recv_trance - recv_trance_last) /1024 ,(recv_trance/1024)/1024);
             recv_trance_last = recv_trance;
             recv_trance_time = now_time;
         }
         
         
+    }
+    if (sock->state == CLOSE_WAIT)
+    {
+        sock->state = LAST_ACK;
+        msg = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
+            sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK|FIN_FLAG_MASK,1,0,NULL,0);
+        sendToLayer3(msg,DEFAULT_HEADER_LEN);  //进行第三次挥手
+        free(msg);
     }
     return len;
 }
@@ -517,7 +525,7 @@ int tju_handle_packet(tju_tcp_t* sock, char* pkt,uint32_t dst_IP){
         char *back = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
                    get_seq(pkt) + get_plen(pkt) - get_hlen(pkt),DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0); 
         sendToLayer3(back,DEFAULT_HEADER_LEN);  
-        //free(back);//按协议返回ack
+        free(back);//按协议返回ack
         pthread_cond_signal(&sock->wait_cond); 
     }
     else
@@ -535,7 +543,25 @@ int tju_handle_packet(tju_tcp_t* sock, char* pkt,uint32_t dst_IP){
     return 0;
 }
 
-int tju_close (tju_tcp_t* sock){
+int tju_close (tju_tcp_t* sock)
+{
+    char *back = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
+                   sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,FIN_FLAG_MASK,1,0,NULL,0); 
+    sendToLayer3(back,DEFAULT_HEADER_LEN); 
+    free(back);
+    sock->state = FIN_WAIT_1;
+    uint32_t time = now_us();
+    while (sock->state != TIME_WAIT)
+    {
+        if (now_us() - time >= RTO_SET && sock->state == FIN_WAIT_1)
+        {
+            back = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
+                   sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,FIN_FLAG_MASK,1,0,NULL,0); 
+            sendToLayer3(back,DEFAULT_HEADER_LEN); 
+            free(back);
+        }
+    }
+    sock->state = CLOSED;
     return 0;
 }
 
@@ -553,7 +579,7 @@ int tju_TCP_handler(tju_tcp_t* sock,char* head,uint32_t dst_IP)
                 char* send_handshack_buff = create_packet_buf(sock->bind_addr.port,sock->established_remote_addr.port,sock->seq,
                 sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,SYN_FLAG_MASK | ACK_FLAG_MASK,1,0,NULL,0);//ack+1 回传seq
                 sendToLayer3(send_handshack_buff,DEFAULT_HEADER_LEN);//将TCP第二次握手消息发送
-               // free(send_handshack_buff);
+                free(send_handshack_buff);
                 sock->state = SYN_RECV;  //等待接收同步消息    
             break;
         case SYN_RECV:
@@ -587,7 +613,33 @@ int tju_TCP_handler(tju_tcp_t* sock,char* head,uint32_t dst_IP)
                     char* send_handshack_buff = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
                     sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0);
                     sendToLayer3(send_handshack_buff,DEFAULT_HEADER_LEN);  //进行最后一次握手,不需要等待返回
-                   // free(send_handshack_buff);
+                    free(send_handshack_buff);
+                }
+            break;
+        case FIN_WAIT_1:
+            //第二次挥手
+                if (get_ack(head) == sock->seq+1 && get_flags(head) == ACK_FLAG_MASK)
+                {
+                    sock->seq++;
+                    sock->state = FIN_WAIT_2;
+                }
+            break;
+        case FIN_WAIT_2:
+            //检测到第三次挥手
+                if (get_ack(head) == sock->seq && get_flags(head) == (ACK_FLAG_MASK|FIN_FLAG_MASK))
+                {
+                    sock->state = TIME_WAIT;
+                    char* send_handshack_buff = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
+                    get_seq(head) + 1,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0);
+                    sendToLayer3(send_handshack_buff,DEFAULT_HEADER_LEN);  //进行最后一次挥手,不需要等待返回
+                    sock->ack = get_seq(head)+1;
+                    free(send_handshack_buff);
+                }
+            break;
+        case LAST_ACK:
+                if (get_ack(head) == sock->seq)
+                {
+                    sock->state = CLOSED;
                 }
             break;
         case ESTABLISHED:
@@ -596,6 +648,30 @@ int tju_TCP_handler(tju_tcp_t* sock,char* head,uint32_t dst_IP)
                 if (get_plen(head) == get_hlen(head))
                 {//证明这是一个确认接收包,不需要返回任何消息,只需要移动窗口
                   //  printf("检查4\n");
+                  if (get_flags(head) == FIN_FLAG_MASK)
+                  {//进行挥手
+                        sock->ack = get_seq(head)+1;
+                        char* send_handshack_buff = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
+                        sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0);
+                        sendToLayer3(send_handshack_buff,DEFAULT_HEADER_LEN);  //进行最后一次挥手,不需要等待返回
+                        free(send_handshack_buff);
+                        for (int i = 0; i < TCP_SENDWN_SIZE; i++)
+                        {
+                            if (sock->window.wnd_send->packs[i].send_lenth != 0)
+                            {
+                                sock->state = sock->state=CLOSE_WAIT;
+                                return;   
+                            }
+                        }//如果没有在发送的消息
+                        send_handshack_buff = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
+                        sock->ack,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK|FIN_FLAG_MASK,1,0,NULL,0);
+                        sendToLayer3(send_handshack_buff,DEFAULT_HEADER_LEN);  //进行最后一次挥手,不需要等待返回
+                        free(send_handshack_buff);
+                        sock->state = LAST_ACK;
+                        sock->seq++;
+                        return;
+                  }
+                  
                     for (int i = 0; i < TCP_SENDWN_SIZE; i++)
                     {
                         if (sock->window.wnd_send->packs[i].send_waiting_ack == get_ack(head))
@@ -625,7 +701,7 @@ int tju_TCP_handler(tju_tcp_t* sock,char* head,uint32_t dst_IP)
                         char *pkt = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
                         get_seq(head) + get_plen(head) - get_hlen(head),DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0); 
                         sendToLayer3(pkt,DEFAULT_HEADER_LEN);  
-                        //free(pkt);
+                        free(pkt);
                         //仅返回ack
                     }
                     else if (get_seq(head) > sock->window.wnd_recv->expect_seq )
@@ -646,7 +722,7 @@ int tju_TCP_handler(tju_tcp_t* sock,char* head,uint32_t dst_IP)
                         char *pkt = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
                         get_seq(head) + get_plen(head) - get_hlen(head),DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0); 
                         sendToLayer3(pkt,DEFAULT_HEADER_LEN);  
-                        //free(pkt);
+                        free(pkt);
                     }
                     else
                     {//此处expect_seq == get_seq(head) 填补数据 expect_seq步进 并且检查滑动 
@@ -685,7 +761,7 @@ int tju_TCP_handler(tju_tcp_t* sock,char* head,uint32_t dst_IP)
                         char *pkt = create_packet_buf(sock->established_local_addr.port,sock->established_remote_addr.port,sock->seq,
                         get_seq(head) + get_plen(head) - get_hlen(head),DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,ACK_FLAG_MASK,1,0,NULL,0); 
                         sendToLayer3(pkt,DEFAULT_HEADER_LEN);  
-                        //free(pkt);
+                        free(pkt);
                         pthread_cond_signal(&sock->wait_cond);//通知收到消息
                     }
                     

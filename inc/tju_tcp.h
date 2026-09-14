@@ -5,8 +5,8 @@
 #include "tju_packet.h"
 #include "kernel.h"
 
-#define SERVER_IP "172.17.0.3"
-#define CLIENT_IP "172.17.0.2"
+#define SERVER_IP "172.17.0.6"
+#define CLIENT_IP "172.17.0.5"
 
 void tcp_rto_count(tju_tcp_t* sock,uint32_t RTT_sample);
 void tcp_rto_backoff(tju_tcp_t* sock);

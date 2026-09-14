@@ -16,6 +16,7 @@ void tcp_WriteMark(tju_tcp_t* sock, uint32_t seq,uint16_t len);
 uint32_t now_us();
 void tcp_send_window_reset(send_window* wind);
 uint8_t tcp_checksum(uint16_t* data, int len) ;
+void tcp_quick_ack(tju_tcp_t* sock,uint32_t i);
 
 /*
 创建 TCP socket 

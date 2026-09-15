@@ -5,14 +5,14 @@
 #include "tju_packet.h"
 #include "kernel.h"
 
-#define SERVER_IP "172.17.0.6"
-#define CLIENT_IP "172.17.0.5"
+#define SERVER_IP "172.17.0.3"
+#define CLIENT_IP "172.17.0.2"
 
 void tcp_rto_count(tju_tcp_t* sock,uint32_t RTT_sample);
 void tcp_rto_backoff(tju_tcp_t* sock);
 
 uint16_t tcp_FindMark(tju_tcp_t* sock, uint32_t seq);
-void tcp_WriteMark(tju_tcp_t* sock, uint32_t seq,uint16_t len);
+int tcp_WriteMark(tju_tcp_t* sock, uint32_t seq, uint16_t len);
 uint32_t now_us();
 void tcp_send_window_reset(send_window* wind);
 uint8_t tcp_checksum(uint16_t* data, int len) ;

@@ -37,11 +37,11 @@ int main(int argc, char **argv) {
     tju_send(new_conn, "hello world", 12);
     tju_send(new_conn, "hello tju", 10);
 
-    char buf[2021];
+    char buf[7705];
     tju_recv(new_conn, (void*)buf, 12);
     printf("server recv %s\n", buf);
 
-    tju_recv(new_conn, (void*)buf, 10);
+    tju_recv(new_conn, (void*)buf, 7704);
     printf("server recv %s\n", buf);
 
 

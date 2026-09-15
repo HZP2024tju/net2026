@@ -46,7 +46,7 @@
 #define TIME_WAIT 10
 
 #define RTO_SET 5000  //重传时间
-#define RTO_up 2000000
+#define RTO_up 18000
 #define RTO_down 1000
 // TCP 拥塞控制状态
 #define SLOW_START 0
@@ -56,11 +56,11 @@
 #define send_buff_lenth 0
 #define recv_buff_lenth 0
 // TCP 接受窗口大小
-#define TCP_RECV_PACK_NUM 52
+#define TCP_RECV_PACK_NUM 200
 #define TCP_RECVWN_SIZE TCP_RECV_PACK_NUM*MAX_DLEN // 比如最多放32个满载数据包
 
 // TCP 发送窗口
-#define TCP_SENDWN_SIZE 50  //发送窗口大小
+#define TCP_SENDWN_SIZE 55  //发送窗口大小
 // 注释的内容如果想用就可以用 不想用就删掉 仅仅提供思路和灵感
 
 typedef struct Send_window
@@ -72,6 +72,7 @@ typedef struct Send_window
 	uint32_t send_time;   //上一次发送时间
 	uint32_t send_time_base;
 	uint8_t quick_ok;
+	uint8_t has_resend;
 }send_window;  //窗口结构体
 
 typedef struct {
@@ -81,7 +82,8 @@ typedef struct {
     uint32_t base;
     uint32_t nextseq;
 //   uint32_t estmated_rtt;
-     int ack_cnt;
+     uint32_t ack_cnt;
+	uint32_t max_ack;
      pthread_mutex_t ack_cnt_lock; //维护ack
 	send_window packs[TCP_SENDWN_SIZE];
 	
@@ -107,7 +109,7 @@ typedef struct {
 	uint32_t max_seq; //记录本次窗口最大接收到的seq
 	recv_mark mark[TCP_RECV_PACK_NUM]; //标记窗口可滑动区域
 //   received_packet_t* head;
-//   char buf[TCP_RECVWN_SIZE];
+    char buf[TCP_RECVWN_SIZE];
 } receiver_window_t;
 
 // TCP 窗口 每个建立了连接的TCP都包括发送和接受两个窗口
@@ -139,7 +141,7 @@ typedef struct {
 	int received_len; // 接收数据缓存长度
 
 	pthread_cond_t wait_cond; // 可以被用来唤醒recv函数调用时等待的线程
-
+	pthread_cond_t send_ack_cond;
 	window_t window; // 发送和接受窗口
 
 	uint32_t RTO ;//超时重传时间 应该是微秒级别的

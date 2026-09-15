@@ -58,6 +58,10 @@ char* create_packet_buf(uint16_t src, uint16_t dst, uint32_t seq, uint32_t ack,
     uint16_t hlen, uint16_t plen, uint8_t flags, uint16_t adv_window, 
     uint8_t ext, char* data, int len);
 
+	
+void create_wind_packet(char*msg, uint16_t src, uint16_t dst, uint32_t seq, uint32_t ack,
+    uint16_t hlen, uint16_t plen, uint8_t flags, uint16_t adv_window, 
+    uint8_t ext, char* data, int len);
 /*
  清除一个tju_packet_t的内存占用
  */
@@ -81,7 +85,8 @@ uint8_t get_ext(char* msg);
 
 /*############################################## 下面是实现上面函数功能的辅助函数 用户没必要调用 ##############################################*/
 char* packet_to_buf(tju_packet_t* packet);
-char* header_in_char(uint16_t src, uint16_t dst, uint32_t seq, uint32_t ack,
+void packet_buf_in(char*msg, tju_packet_t* p);
+void header_in_char(char*msg,uint16_t src, uint16_t dst, uint32_t seq, uint32_t ack,
     uint16_t hlen, uint16_t plen, uint8_t flags, uint16_t adv_window, 
     uint8_t ext);
 
